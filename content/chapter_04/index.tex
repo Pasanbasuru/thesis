@@ -1,0 +1,383 @@
+\paragraph{}
+This chapter elaborates the implementation details of the proposed design. 
+
+\section{Indy framework}
+Indy is a subproject of hyperledger project. It is designed and developed by the Linux Foundation. Hyperledger project has several sub-projects for different use cases. Indy is developed for the Identity Management use case. For all these reasons, the Indy Project has developed specifications, terminology, and design patterns for decentralized identity along with an implementation of these concepts that can be leveraged and consumed both inside and outside the Hyperledger Project. This framework allows to build a normal blockchain(a public blockchain). The research design should be implemented on top of that. In order to that, the first step is to dockerize the environment. The following implementations are going on top of that a docker image which has a couple of nodes as docker containers. 
+
+\paragraph{}
+The implementation is running on Jupyter notebook as python environment and codebase is written in python.
+
+\section{Configure the pool}
+Nodes are located in the node pool which is the network. Every node has a different IP address and networking every one of them makes the node pool. Those nodes are stored inside the pool ledger(node transactions). This is the place where blockchain sets up its genesis transaction path. 
+
+\begin{verbatim}
+    await pool.set_protocol_version(2)
+
+    pool_ = {
+        'name': 'pool1',
+        'config': json.dumps({"genesis_txn": '/home/indy/sandbox/pool_transactions_genesis'})
+    }
+    print("Open Pool Ledger: {}".format(pool_['name']))
+
+    try:
+        await pool.create_pool_ledger_config(pool_['name'], pool_['config'])
+    except IndyError as ex:
+        if ex.error_code == ErrorCode.PoolLedgerConfigAlreadyExistsError:
+            pass
+    pool_['handle'] = await pool.open_pool_ledger(pool_['name'], None)
+
+\end{verbatim}
+
+\section{Setting up Steward Role}
+
+\paragraph{}
+Steward is the one who created the chain and genesis block are defined by this role. It creates the NYM transaction(creation of a DID in the ledger) and created a wallet. Indy has this concept called a wallet that is secure storage for DIDs, keys and other crypto materials. The steward’s wallet is created and store the did. Then steward can obtain trust anchor role.
+
+\begin{verbatim}
+    steward = {
+        'name': "Sovrin Steward",
+        'wallet_config': json.dumps({'id': 'sovrin_steward_wallet'}),
+        'wallet_credentials': json.dumps({'key': 'steward_wallet_key'}),
+        'pool': pool_['handle'],
+        'seed': '000000000000000000000000Steward1'
+    }
+
+    await create_wallet(steward)
+
+    print("\"Sovrin Steward\" -> Create and store in Wallet DID from seed")
+    steward['did_info'] = json.dumps({'seed': steward['seed']})
+    steward['did'], steward['key'] = await did.create_and_store_my_did(steward['wallet'], steward['did_info’]
+\end{verbatim}
+
+\paragraph{}
+These DIDs are using base58Check encoding.
+
+\section{Obtaining verinym for organizations}
+
+\paragraph{}
+Every identity owner has a legal identity. A verinym is a DID which related to this legal identity. In order to join the chain organizations should create this verinym. It happens in a couple of steps.
+
+\begin{enumerate}
+    \item Creates a wallet if the organization is new to the chain\\
+    Birth certificates are issued by the Registrar General’s Department(RGD). This RGD would be the first organization that register with this chain. 
+    \begin{verbatim}
+        await wallet.create_wallet(rgd['wallet_config'], rgd['wallet_credentials'])
+        rgd['wallet'] = await wallet.open_wallet(rgd['wallet_config'], rgd['wallet_credentials'])
+    \end{verbatim}
+
+    \item Create a DID in the wallet.
+    \begin{verbatim}
+        # RGD Agent
+        (rgd['did'], rgd['key']) = await did.create_and_store_my_did(rgd['wallet'], "{}")
+    \end{verbatim}
+
+    \item Registrar General’s Department creates a message with DID and key.
+    \begin{verbatim}
+        # RGD Agent
+        rgd['did_info'] = json.dumps({
+            'did': rgd['did'],
+            'verkey': rgd['key']
+        })
+    \end{verbatim}
+
+    \item Send the DID info message to Steward. This is how a communication channel is created.
+    \begin{verbatim}
+        steward['rgd_info'] = rgd['did_info'] 
+    \end{verbatim}
+
+    \item Steward is a trust anchor, so he can send the transaction to the ledger(NYM transaction). But the DID owner is RDG.
+    \begin{verbatim}
+        # Steward Agent
+        nym_request = await ledger.build_nym_request(steward['did'], steward['rgd_info']['did'],
+                                                    steward['rgd_info']['verkey'], None, 'TRUST_ANCHOR')
+        await ledger.sign_and_submit_request(steward['pool'], steward['wallet'], steward['did'], nym_request)
+    \end{verbatim}
+\end{enumerate}
+
+\paragraph{}
+After this step, RGD has a DID from his identity in the ledger. The every other organization should do the same in order to create a DID. The government is also an organization registered in the chain.
+
+\section{Schemas Setup for credentials}
+
+\paragraph{}
+Schemas are structures that consist of attributes names and details of a credential. Credentials cannot be altered, that is why it maintains a version number. The government is a trust anchor which already created. Every trust anchor can publish credential schema to the ledger.
+
+\paragraph{}
+Schema for Birth certificate
+
+\begin{verbatim}
+    {
+      'name': 'Birth Certificate',
+      'version': '1.0',
+      'attributes': ['first_name', 'last_name', '', 'birth_date', ‘sex’, ‘Address, ‘Registrar’s_devision’’,’father_name’,’mother_name’,’certificate_number’]
+    }
+\end{verbatim}
+
+\begin{enumerate}
+    \item Create the schema 
+    \begin{verbatim}
+        # Government Agent
+        birth_certificate = {
+            'name': 'Birth Certificate',
+            'version': '1.0',
+            'attributes': ['first_name', 'last_name', '',
+                        'birth_date', ‘sex’, ‘Address, ‘Registrar’s_devision’’, ’father_name’, ’mother_name’, ’certificate_number’]
+        }
+
+        (government['birth_certificate_schema_id'], government['birth_certificate_schema']) = \
+            await anoncreds.issuer_create_schema(government['did'], birth_certificate['name'], birth_certificate['version'],
+                                                json.dumps(birth_certificate['attributes']))
+        birth_certificate_schema_id = government['birth_certificate_schema_id']
+    \end{verbatim}
+
+    \item The government (trust anchor) sends the schema to the ledger.
+    \begin{verbatim}
+        # Government Agent
+        schema_request = await ledger.build_schema_request(government['did'], government['transcript_schema'])
+        await ledger.sign_and_submit_request(government['pool'], government['wallet'], government['did'], schema_request)
+    \end{verbatim}
+\end{enumerate}
+
+\section{Setup of credential definition}
+
+\paragraph{}
+Issuer signs the credentials here.
+
+\begin{enumerate}
+    \item RDA gets the credential schema.
+    \begin{verbatim}
+        # RGD Agent
+        get_schema_request = await ledger.build_get_schema_request(rgd['did'], birth_certificate_schema_id)
+        get_schema_response = await ledger.submit_request(rgd['pool'], get_schema_request) 
+        rgd['birth_certificate_schema_id'], rgd['birth_certificate_schema'] = await ledger.parse_get_schema_response(get_schema_response)
+    \end{verbatim}
+
+    \item Create a credential definition. Then it stores in the wallet of RGD(cannot read)
+    \begin{verbatim}
+        # RGD Agent
+        birth_certificate_cred_def = {
+            'tag': 'TAG1',
+            'type': 'CL',
+            'config': {"support_revocation": False}
+        }
+        (rgd['birth_certificate_cred_def_id'], rgd['birth_certificate_cred_def']) = \
+            await anoncreds.issuer_create_and_store_credential_def(rgd['wallet'], rgd['did'],
+                                                                rgd['birth_certificate_schema'], birth_certificate_cred_def['tag'],
+                                                                birth_certificate_cred_def['type'],
+                                                                json.dumps(birth_certificate_cred_def['config']))
+    \end{verbatim}
+
+    \item Update the ledger by sending the credential definition. It is done by the trust anchor(RGD).
+    \begin{verbatim}
+        # RGD Agent     
+        cred_def_request = await ledger.build_cred_def_request(rgd['did'], rgd['birth_certificate_cred_def'])
+        await ledger.sign_and_submit_request(rgd['pool'], rgd['wallet'], rgd['did'], cred_def_request)
+    \end{verbatim}
+\end{enumerate}
+
+\section{The user gets a credential (a birth certificate)}
+
+\paragraph{}
+There is a user with no credentials initially. This is how the user gets credentials. A user called “Pasindu” gets a birth certificate from the Registrar General’s Department.
+
+\begin{verbatim}
+    # RGD Agent
+    rgd['birth_certificate_cred_offer'] = await anoncreds.issuer_create_credential_offer(rgd['wallet'], rgd['birth_certificate_cred_def_id'])
+    
+    pasindu['birth_certificate_cred_offer'] = rgd['birth_certificate_cred_offer']
+\end{verbatim}
+
+\paragraph{}
+This birth certificate is issued by the RGD.
+Then the user needs a master key to the wallet
+
+\begin{verbatim}
+    # Pasindu Agent
+  pasindu['master_secret_id'] = await anoncreds.prover_create_master_secret(pasindu['wallet'], None)
+\end{verbatim}
+
+\paragraph{}
+In order to make a credential request, the user needs to credential definition.
+
+\begin{verbatim}
+    # Pasindu Agent
+    get_cred_def_request = await ledger.build_get_cred_def_request(pasindu['did_for_rgd'], pasindu['birth_certificate_cred_offer']['cred_def_id'])
+    get_cred_def_response = await ledger.submit_request(pasindu['pool'], get_cred_def_request)
+    pasindu['birth_certificate_cred_def'] = await ledger.parse_get_cred_def_response(get_cred_def_response)
+\end{verbatim}
+
+\paragraph{}
+Now, the user can request the credentials
+
+\begin{verbatim}
+    # Pasindu Agent
+    (pasindu['birth_certificate_cred_request'], pasindu['birth_certificate_cred_request_metadata']) = \
+        await anoncreds.prover_create_credential_req(pasindu['wallet'], pasindu['did_for_rgd'], pasindu['birth_certificate_cred_offer'],
+                                                     pasindu['birth_certificate_cred_def'], pasindu['master_secret_id'])
+                                                     
+    rgd['birth_certificate_cred_request'] = pasindu['birth_certificate_cred_request']
+
+\end{verbatim}
+
+\paragraph{}
+The organization(RGD) creates the schema with raw and encoded values.
+
+\begin{verbatim}
+    # RGD Agent
+    # note that encoding is not standardized by Indy except that 32-bit integers are encoded as themselves. IS-786
+    birth_certificate_cred_values = json.dumps({
+        "first_name": {"raw": "Pasindu", "encoded": "1139481716457488690172217916278103335"},
+        "last_name": {"raw": "Lakshitha", "encoded": "5321642780241790123587902456789123452"},
+        "birth_date": {"raw": "1995.09.25", "encoded": "12434523576212321"},
+        "sex": {"raw": "male", "encoded": "2213454313412354"},
+        "Address": {"raw": "76,Biyagama RD,Kelaniya", "encoded": "3124141231422543541"},
+        "Registrar’s_devision": {"raw": "Gampaha", "encoded": "2015"},
+        "father_name": {"raw": "K.A. Perera", "encoded": "2414123142254354"},
+    "mother_name": {"raw": "M.L. Wickramsinghe", "encoded": "14123142"},
+    "certificate_number": {"raw": "231131", "encoded": "4545454313412354"},
+
+
+    })
+    rgd['birth_certificate_cred'], _, _ = \
+        await anoncreds.issuer_create_credential(rgd['wallet'], rgd['birth_certificate_cred_offer'], rgd['transcript_cred_request'],
+                                                birth_certificate_cred_values, None, None)
+                                                
+    pasindu['birth_certificate_cred'] = rgd['birth_certificate_cred']
+\end{verbatim}
+
+\paragraph{}
+Now, credentials for a birth certificate(credential) has been issued by the RGD(issuer/organization). and Pasindu(User) can store the credentials in his wallet.
+
+\begin{verbatim}
+    # Pasindu Agent
+    await anoncreds.prover_store_credential(pasindu['wallet'], None, rgd['birth_certificate_cred_request'], rgd['birth_certificate_cred_request_metadata'],
+                                            pasindu['birth_certificate_cred'], pasindu['birth_certificate_cred_def'], None)
+
+\end{verbatim}
+
+\section{How to use the credentials}
+
+\paragraph{}
+Now user has his credentials stores in the wallet. There is another organization that is in the chain called the Department of Motor Traffic(DMT/RMV) like RGD. after established the connection between the user(Pasindu) and the organization(RMV), the user got the license application proof request in order to apply for a driving license.
+
+\begin{verbatim}
+    # RMV Agent
+    rmv['application_proof_request'] = json.dumps({
+        'nonce': '1432422343242122312411212',
+        'name': 'Driving-license-Application',
+        'version': '0.1',
+        'requested_attributes': {
+            'attr1_referent': {
+                'name': 'first_name'
+            },
+            'attr2_referent': {
+                'name': 'last_name'
+            },
+            'attr3_referent': {
+                'name': 'sex',
+                'restrictions': [{'cred_def_id': rgd['transcript_cred_def_id']}]
+            },
+            'attr4_referent': {
+                'name': 'birth_date',
+                'restrictions': [{'cred_def_id': rgd['transcript_cred_def_id']}]
+            },
+            'attr5_referent': {
+                'name': 'address',
+                'restrictions': [{'cred_def_id': rgd['transcript_cred_def_id']}]
+            },
+            'attr6_referent': {
+                'name': 'phone_number'
+            }
+        }
+            })
+    
+    pasindu['application_proof_request'] = rmv['birth_certificate_cred']
+\end{verbatim}
+
+\paragraph{}
+The proof request asks to sex, address, birth\_date in the credentials should be asserted by an issuer and the key of the schema. Only several attributes can be verifiable in the above proof request.
+
+\paragraph{}
+The user(Pasindu ) has only one credential to prove the requirements in his wallet. In order to fill the application, Pasindu can decide what attributes should be revealed.
+
+\begin{verbatim}
+    #Pasindu Agent
+    pasindu['application_requested_creds'] = json.dumps({
+        'self_attested_attributes': {
+            'attr1_referent': 'Pasindu',
+            'attr2_referent': 'Lakshitha',
+            'attr6_referent': '123-45-6789'
+        },
+        'requested_attributes': {
+            'attr3_referent': {'cred_id': cred_for_attr3['referent'], 'revealed': True},
+            'attr4_referent': {'cred_id': cred_for_attr4['referent'], 'revealed': True},
+            'attr5_referent': {'cred_id': cred_for_attr5['referent'], 'revealed': True},
+        },
+        'requested_predicates': {'predicate1_referent': {'cred_id': cred_for_predicate1['referent']}}
+    })
+
+\end{verbatim}
+
+\paragraph{}
+The user needs to reveal only 3 attributes(sex,birth\_date, address). then the user can make a proof request for the application.
+
+\begin{verbatim}
+    # Pasindu Agent
+    pasindu['apply_license_proof'] = \
+            await anoncreds.prover_create_proof(pasindu['wallet'], pasindu['application_proof_request'], pasindu['application_requested_creds'],
+                                                pasindu['master_secret_id'], pasindu['schemas'], pasindu['cred_defs'], pasindu['revoc_states'])
+
+    rmv['apply_job_proof'] = pasindu[apply_license_proof]
+\end{verbatim}
+
+\paragraph{}
+The proof that RMV received is as follows
+
+\begin{verbatim}
+    # RMV Agent
+    {
+        'requested_proof': {
+            'revealed_attrs': {
+                'attr4_referent': {'sub_proof_index': 0, 'raw':'birth_date', 'encoded':'2213454313412354'},
+                'attr5_referent': ['sub_proof_index': 0, 'raw':'sex', 'encoded':'3124141231422543541'},
+                'attr3_referent': ['sub_proof_index': 0, 'raw':'address', 'encoded':'12434523576212321'}
+            },
+            'self_attested_attrs': {
+                'attr1_referent': ‘Pasindu',
+                'attr2_referent': 'Lakshitha',
+                'attr6_referent': '123-45-6789'
+            },
+            'unrevealed_attrs': {},
+            'predicates': {
+                'predicate1_referent': {'sub_proof_index': 0}
+            }
+        },
+        'proof' : [] # Validity Proof that RMV can check
+        'identifiers' : [ # Identifiers of credentials were used for Proof building
+            {
+                'schema_id': certificate_schema_id,
+                'cred_def_id': rgd_birth_certificate_cred_def_id,
+                'rev_reg_id': None,
+                'timestamp': None
+            }
+        }
+    }
+\end{verbatim}
+
+\paragraph{}
+Rmv got all the required details and how it verifies as follows.
+
+\begin{verbatim}
+    # RMV Agent
+assert await anoncreds.verifier_verify_proof(rmv['application_proof_request'], rmv[apply_license_proof], rmv['schemas'], rmv['cred_defs'], rmv['revoc_ref_defs'], rmv['revoc_regs'])
+\end{verbatim}
+
+\paragraph{}
+As the final outcome the organization(RMV) can accept the client(register for the driving license).
+
+\begin{verbatim}
+    # RMV Agent
+    rmv['certificate_cred_offer'] = await anoncreds.issuer_create_credential_offer(rmv['wallet'], rmv['certificate_cred_def_id'])
+    
+    pasindu['certificate_cred_offer'] = rmv['certificate_cred_offer']
+\end{verbatim}
