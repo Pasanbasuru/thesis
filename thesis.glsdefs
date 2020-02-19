@@ -1,0 +1,90 @@
+\ifglsentryexists{stft}{}%
+{%
+\gls@defglossaryentry{stft}%
+{%
+name={STFT},%
+sort={STFT},%
+type={acronym},%
+first={Short Time Fourier Transformation\glsspace (STFT)},%
+firstplural={Short Time Fourier Transformations\glsspace (STFTs)},%
+text={STFT},%
+plural={STFTs},%
+description={Short Time Fourier Transformation},%
+descriptionplural={Short Time Fourier Transformation\acrpluralsuffix },%
+symbol={\relax },%
+symbolplural={\relax },%
+user1={},%
+user2={},%
+user3={},%
+user4={},%
+user5={},%
+user6={},%
+long={Short Time Fourier Transformation},%
+longplural={Short Time Fourier Transformations},%
+short={STFT},%
+shortplural={STFTs},%
+counter={page},%
+parent={},%
+%
+}%
+}%
+\ifglsentryexists{sift}{}%
+{%
+\gls@defglossaryentry{sift}%
+{%
+name={SIFT},%
+sort={SIFT},%
+type={acronym},%
+first={Scale Invarient Feature Transform\glsspace (SIFT)},%
+firstplural={Scale Invarient Feature Transforms\glsspace (SIFTs)},%
+text={SIFT},%
+plural={SIFTs},%
+description={Scale Invarient Feature Transform},%
+descriptionplural={Scale Invarient Feature Transform\acrpluralsuffix },%
+symbol={\relax },%
+symbolplural={\relax },%
+user1={},%
+user2={},%
+user3={},%
+user4={},%
+user5={},%
+user6={},%
+long={Scale Invarient Feature Transform},%
+longplural={Scale Invarient Feature Transforms},%
+short={SIFT},%
+shortplural={SIFTs},%
+counter={page},%
+parent={},%
+%
+}%
+}%
+\ifglsentryexists{dog}{}%
+{%
+\gls@defglossaryentry{dog}%
+{%
+name={DoG},%
+sort={DoG},%
+type={acronym},%
+first={Difference of Gaussians\glsspace (DoG)},%
+firstplural={Difference of Gaussianss\glsspace (DoGs)},%
+text={DoG},%
+plural={DoGs},%
+description={Difference of Gaussians},%
+descriptionplural={Difference of Gaussians\acrpluralsuffix },%
+symbol={\relax },%
+symbolplural={\relax },%
+user1={},%
+user2={},%
+user3={},%
+user4={},%
+user5={},%
+user6={},%
+long={Difference of Gaussians},%
+longplural={Difference of Gaussianss},%
+short={DoG},%
+shortplural={DoGs},%
+counter={page},%
+parent={},%
+%
+}%
+}%

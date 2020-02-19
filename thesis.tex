@@ -1,0 +1,77 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[none]{hyphenat}
+\usepackage{setspace}
+\usepackage[left=3.7cm,right=2.5cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[toc,page]{appendix}
+\usepackage{multirow}
+\usepackage{titling}
+\usepackage[acronym]{glossaries}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{dirtytalk}
+
+\author{P.B.W. Amaradiwakara}
+
+\linespread{2}
+\graphicspath{ {images/} }
+
+\begin{document}
+\input{content/acronym.tex}
+
+\input{content/title_page.tex}
+\clearpage
+
+\linespread{2}
+\input{content/cover.tex}
+
+\pagenumbering{roman}
+\onehalfspacing
+\sloppy
+\input{content/declaration.tex}
+
+\input{content/abstract.tex}
+
+\input{content/preface.tex}
+
+\input{content/acknowledgement.tex}
+
+
+
+\renewcommand\contentsname{Table of Contents\\}
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+
+%introduction Chapter
+\chapter{Introduction}
+\input{content/chapter_01/background_to_the_research.tex}
+\input{content/chapter_01/research_problem_and_questions.tex}
+\input{content/chapter_01/methodology.tex}
+\input{content/chapter_01/scope.tex}
+
+
+\chapter{Literature Review}
+\input{content/chapter_02/index.tex}
+
+\chapter{Design}
+\input{content/chapter_03/index.tex}
+
+\chapter{Implementation}
+
+\chapter{Results and Evaluation}
+
+\chapter{Conclusions}
+
+
+\renewcommand\bibname{References}
+\bibliography{references} 
+\addcontentsline{toc}{chapter}{References}
+\bibliographystyle{ieeetr}
+
+\end{document}
+
